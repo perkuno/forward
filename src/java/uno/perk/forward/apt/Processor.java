@@ -45,7 +45,7 @@ public class Processor extends AbstractProcessor {
 
   @Override
   public SourceVersion getSupportedSourceVersion() {
-    return SourceVersion.RELEASE_6;
+    return SourceVersion.RELEASE_7;
   }
 
   private static final Pattern CLASSNAME_MATCHER = Pattern.compile("(.*)");
