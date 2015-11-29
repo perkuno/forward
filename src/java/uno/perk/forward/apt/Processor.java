@@ -11,8 +11,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.annotation.Generated;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
@@ -27,6 +29,7 @@ import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
+import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
@@ -42,16 +45,12 @@ import uno.perk.forward.Forward;
 /**
  * Generates Forwarder implementations for types annotated with {@link Forward}.
  */
+@SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class Processor extends AbstractProcessor {
 
   @Override
   public Set<String> getSupportedAnnotationTypes() {
     return Collections.singleton(Forward.class.getName());
-  }
-
-  @Override
-  public SourceVersion getSupportedSourceVersion() {
-    return SourceVersion.RELEASE_7;
   }
 
   private static class ForwardMirror {
@@ -92,6 +91,10 @@ public class Processor extends AbstractProcessor {
     String forwarderPattern = null;
 
     AnnotationMirror forwardAnnotation = getForwardAnnotation(typeElement);
+    if (forwardAnnotation == null) {
+      error("Unable to find @Forward annotation.", typeElement);
+    }
+
     for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry :
         getElementUtils().getElementValuesWithDefaults(forwardAnnotation).entrySet()) {
 
@@ -154,7 +157,12 @@ public class Processor extends AbstractProcessor {
       Iterable<TypeElement> forwardedTypes,
       String forwarderName) throws IOException {
 
-    TypeSpec.Builder forwarderBuilder = TypeSpec.classBuilder(forwarderName);
+    TypeSpec.Builder forwarderBuilder =
+        TypeSpec.classBuilder(forwarderName)
+          .addAnnotation(
+              AnnotationSpec.builder(Generated.class)
+                  .addMember("value", "$S", getClass().getName())
+                  .build());
     MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder();
 
     List<ForwardedTypeInfo> forwardedTypeInfos = createForwardedTypeInfos(forwardedTypes);
@@ -259,7 +267,7 @@ public class Processor extends AbstractProcessor {
         return annotationMirror;
       }
     }
-    throw new IllegalStateException();
+    return null;
   }
 
   private TypeElement getForwardAnnotationTypeElement() {
