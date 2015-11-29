@@ -6,17 +6,17 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Generates a forwarding implementation for a given interface.
+ * Generates a forwarding implementation for a given set of interfaces.
  *
  * Applying this annotation to a type will generate forwarding methods for the specified interface
- * type.
+ * types.
  * <p>
  * The only requirements are:
  * <ol>
  *   <li>The annotated class must extend the package-private generated forwarder.</li>
- *   <li>If the forwarded type has type parameters, the annotated class must either declare at
- *   least those same type parameters and forward them to the package-private generated forwarder
- *   or else it must seal concrete type parameters in to the extended forwarder.</li>
+ *   <li>If any of the the forwarded types have type parameters, the annotated class must either
+ *   declare at least those same type parameters and forward them to the package-private generated
+ *   forwarder or else it must seal concrete type parameters in to the extended forwarder.</li>
  * </ol>
  */
 @Retention(RetentionPolicy.SOURCE)
