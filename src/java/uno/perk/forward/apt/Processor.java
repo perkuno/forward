@@ -1,10 +1,8 @@
 package uno.perk.forward.apt;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,7 +23,6 @@ import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
@@ -91,8 +88,7 @@ public class Processor extends AbstractProcessor {
   }
 
   private ForwardMirror getForwardMirror(TypeElement typeElement) {
-    List<TypeElement> forwardedTypes = new LinkedList<TypeElement>();
-    String delegateName = null;
+    List<TypeElement> forwardedTypes = new LinkedList<>();
     String forwarderPattern = null;
 
     AnnotationMirror forwardAnnotation = getForwardAnnotation(typeElement);
@@ -101,30 +97,33 @@ public class Processor extends AbstractProcessor {
 
       String keyName = entry.getKey().getSimpleName().toString();
       Object value = entry.getValue().getValue();
-      if (keyName.equals("value")) {
-        if (!(value instanceof List)) {
-          error("Unexpected value for 'value'.", typeElement);
-        }
-        @SuppressWarnings("unchecked") // AnnotationValue guarantees the List parameterization here.
-        List<? extends AnnotationValue> types = (List<? extends AnnotationValue>) value;
-        for (AnnotationValue type : types) {
-          note("AnnotationValue: " + type + " of type: " + type.getClass(), typeElement);
-          DeclaredType declaredType = (DeclaredType) type.getValue();
-          TypeElement forwardedType = (TypeElement) declaredType.asElement();
-          if (!forwardedType.getKind().isInterface()) {
-            error("@Forward can only forward interface types.", typeElement);
+      switch (keyName) {
+        case "value":
+          if (!(value instanceof List)) {
+            error("Unexpected value for 'value'.", typeElement);
           }
-          forwardedTypes.add(forwardedType);
-        }
-      } else if (keyName.equals("forwarderPattern")) {
-        if (!(value instanceof String)) {
-          error("Unexpected value for 'forwarderPattern'.", typeElement);
-        }
-        forwarderPattern = (String) value;
-      } else {
-        error(
-            String.format("Unexpected annotation member %s = %s.", keyName, value),
-            typeElement);
+          @SuppressWarnings("unchecked") // AnnotationValue guarantees this List parameterization.
+          List<? extends AnnotationValue> types = (List<? extends AnnotationValue>) value;
+          for (AnnotationValue type : types) {
+            DeclaredType declaredType = (DeclaredType) type.getValue();
+            TypeElement forwardedType = (TypeElement) declaredType.asElement();
+            if (!forwardedType.getKind().isInterface()) {
+              error("@Forward can only forward interface types.", typeElement);
+            }
+            forwardedTypes.add(forwardedType);
+          }
+          break;
+        case "forwarderPattern":
+          if (!(value instanceof String)) {
+            error("Unexpected value for 'forwarderPattern'.", typeElement);
+          }
+          forwarderPattern = (String) value;
+          break;
+        default:
+          error(
+              String.format("Unexpected annotation member %s = %s.", keyName, value),
+              typeElement);
+          break;
       }
     }
 
@@ -155,20 +154,10 @@ public class Processor extends AbstractProcessor {
       Iterable<TypeElement> forwardedTypes,
       String forwarderName) throws IOException {
 
-    List<ForwardedTypeInfo> forwardedTypeInfos = new LinkedList<>();
-    for (TypeElement forwardedType : forwardedTypes) {
-      TypeName forwardedTypeName = getTypeName(forwardedType);
-      Name simpleName = forwardedType.getSimpleName();
-      String delegateName =
-          String.format(
-              "%c%s",
-              Character.toLowerCase(simpleName.charAt(0)),
-              simpleName.subSequence(1, simpleName.length()));
-      forwardedTypeInfos.add(new ForwardedTypeInfo(forwardedType, forwardedTypeName, delegateName));
-    }
-
     TypeSpec.Builder forwarderBuilder = TypeSpec.classBuilder(forwarderName);
     MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder();
+
+    List<ForwardedTypeInfo> forwardedTypeInfos = createForwardedTypeInfos(forwardedTypes);
     for (ForwardedTypeInfo forwardedTypeInfo : forwardedTypeInfos) {
       for (TypeParameterElement typeParam : forwardedTypeInfo.forwardedType.getTypeParameters()) {
         TypeVariable typeVariable = (TypeVariable) typeParam.asType();
@@ -228,6 +217,25 @@ public class Processor extends AbstractProcessor {
             .build();
     forwarderFile.writeTo(processingEnv.getFiler());
     note(String.format("Wrote forwarder %s.%s", packageName, forwarderName), typeElement);
+  }
+
+  private List<ForwardedTypeInfo> createForwardedTypeInfos(Iterable<TypeElement> forwardedTypes) {
+    List<ForwardedTypeInfo> forwardedTypeInfos = new LinkedList<>();
+    for (TypeElement forwardedType : forwardedTypes) {
+      TypeName forwardedTypeName = getTypeName(forwardedType);
+
+      Name name = forwardedType.getSimpleName();
+      char initChar = Character.toLowerCase(name.charAt(0));
+      String delegateName;
+      if (name.length() == 1) {
+        delegateName = Character.toString(initChar);
+      } else {
+        delegateName = String.format("%c%s", initChar, name.subSequence(1, name.length()));
+      }
+
+      forwardedTypeInfos.add(new ForwardedTypeInfo(forwardedType, forwardedTypeName, delegateName));
+    }
+    return forwardedTypeInfos;
   }
 
   private static TypeName getTypeName(TypeElement typeElement) {
