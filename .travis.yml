@@ -7,11 +7,10 @@ sudo: false
 language: java
 
 jdk:
-  - oraclejdk8
-  - oraclejdk7
   - openjdk6
   - openjdk7
-  - openjdk8
+  - oraclejdk7
+  - oraclejdk8
 
 before_cache:
   # The `ivydata-*.properties` & root level `*.{properties,xml}` files'
