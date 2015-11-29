@@ -61,23 +61,19 @@ public class ForwardTests {
           // noop
         }
 
-        @Override
-        public boolean cancel(boolean mayInterruptIfRunning) {
+        @Override public boolean cancel(boolean mayInterruptIfRunning) {
           return false;
         }
 
-        @Override
-        public boolean isCancelled() {
+        @Override public boolean isCancelled() {
           return false;
         }
 
-        @Override
-        public boolean isDone() {
+        @Override public boolean isDone() {
           return false;
         }
 
-        @Override
-        public Integer get() throws InterruptedException, ExecutionException {
+        @Override public Integer get() throws InterruptedException, ExecutionException {
           return 42;
         }
 
@@ -138,8 +134,7 @@ public class ForwardTests {
     public void testMultipleForwarders() throws Exception {
       final AtomicBoolean closed = new AtomicBoolean(false);
       Closeable closeable = new Closeable() {
-        @Override
-        public void close() {
+        @Override public void close() {
           closed.set(true);
         }
       };
