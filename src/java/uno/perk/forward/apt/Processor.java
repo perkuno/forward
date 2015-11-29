@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,7 +47,7 @@ import uno.perk.forward.Forward;
 /**
  * Generates Forwarder implementations for types annotated with {@link Forward}.
  */
-@SupportedSourceVersion(SourceVersion.RELEASE_7)
+@SupportedSourceVersion(SourceVersion.RELEASE_8)
 public class Processor extends AbstractProcessor {
 
   @Override
@@ -90,13 +92,13 @@ public class Processor extends AbstractProcessor {
     List<TypeElement> forwardedTypes = new LinkedList<>();
     String forwarderPattern = null;
 
-    AnnotationMirror forwardAnnotation = getForwardAnnotation(typeElement);
-    if (forwardAnnotation == null) {
+    Optional<AnnotationMirror> forwardAnnotation = getForwardAnnotation(typeElement);
+    if (!forwardAnnotation.isPresent()) {
       error("Unable to find @Forward annotation.", typeElement);
     }
 
     for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry :
-        getElementUtils().getElementValuesWithDefaults(forwardAnnotation).entrySet()) {
+        getElementUtils().getElementValuesWithDefaults(forwardAnnotation.get()).entrySet()) {
 
       String keyName = entry.getKey().getSimpleName().toString();
       Object value = entry.getValue().getValue();
@@ -183,7 +185,8 @@ public class Processor extends AbstractProcessor {
 
       constructorBuilder
           .addParameter(typeName, delegateName)
-          .addStatement("this.$L = $L", delegateName, delegateName);
+          .addStatement(
+              "this.$L = $T.requireNonNull($L);", delegateName, Objects.class, delegateName);
     }
     forwarderBuilder.addMethod(constructorBuilder.build());
 
@@ -260,14 +263,14 @@ public class Processor extends AbstractProcessor {
     }
   }
 
-  private AnnotationMirror getForwardAnnotation(Element element) {
+  private Optional<AnnotationMirror> getForwardAnnotation(Element element) {
     TypeElement forwardAnnotationTypeElement = getForwardAnnotationTypeElement();
     for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
       if (annotationMirror.getAnnotationType().asElement().equals(forwardAnnotationTypeElement)) {
-        return annotationMirror;
+        return Optional.of(annotationMirror);
       }
     }
-    return null;
+    return Optional.empty();
   }
 
   private TypeElement getForwardAnnotationTypeElement() {
@@ -287,7 +290,13 @@ public class Processor extends AbstractProcessor {
   }
 
   private void log(Diagnostic.Kind kind, String message, Element element) {
-    AnnotationMirror annotation = element == null ? null : getForwardAnnotation(element);
+    AnnotationMirror annotation = null;
+    if (element != null) {
+      Optional<AnnotationMirror> forwardAnnotation = getForwardAnnotation(element);
+      if (forwardAnnotation.isPresent()) {
+        annotation = forwardAnnotation.get();
+      }
+    }
     processingEnv.getMessager().printMessage(kind, message, element, annotation);
   }
 }
