@@ -146,9 +146,9 @@ public class Processor extends AbstractProcessor {
     final String delegateName;
 
     ForwardedTypeInfo(TypeElement forwardedType, TypeName typeName, String delegateName) {
-      this.delegateName = delegateName;
       this.forwardedType = forwardedType;
       this.typeName = typeName;
+      this.delegateName = delegateName;
     }
   }
 
