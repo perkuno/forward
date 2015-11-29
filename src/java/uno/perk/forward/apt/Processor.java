@@ -186,7 +186,7 @@ public class Processor extends AbstractProcessor {
       constructorBuilder
           .addParameter(typeName, delegateName)
           .addStatement(
-              "this.$L = $T.requireNonNull($L);", delegateName, Objects.class, delegateName);
+              "this.$L = $T.requireNonNull($L)", delegateName, Objects.class, delegateName);
     }
     forwarderBuilder.addMethod(constructorBuilder.build());
 
