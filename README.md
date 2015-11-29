@@ -24,8 +24,8 @@ import uno.perk.forward.Forward;
  * override {@code offer} as well.
  */
 @Forward(Deque.class)
-public abstract class ForwardingDeque<T> extends ForwardingDequeForwarder<T> {
-  public ForwardingDeque(Deque<T> deque) {
+public abstract class ForwardingDeque<E> extends ForwardingDequeForwarder<E> {
+  public ForwardingDeque(Deque<E> deque) {
     super(deque);
   }
 }
@@ -33,16 +33,16 @@ public abstract class ForwardingDeque<T> extends ForwardingDequeForwarder<T> {
 
 The `@Forward` annotation will be processed and code will be generated for
 `ForwardingDequeForwarder` which does all the work of forwarding all the `Deque` methods through 
-the supplied `delegate`.
+the supplied `deque` delegate.
 
 Alternatively, instead of generating a `ForwardingDeque` and extending it to add decoration, you
 can just create an ad-hoc forwarder for immediate local use:
 ```java
 @Forward(Deque.class)
-public class InstrumentedDeque<T> extends InstrumentedDequeForwarder<T> {
+public class InstrumentedDeque<E> extends InstrumentedDequeForwarder<E> {
   private long addFirstCalls;
   
-  public InstrumentedDeque(Deque<T> deque) {
+  public InstrumentedDeque(Deque<E> deque) {
     super(deque);
   }
   
@@ -57,6 +57,18 @@ public class InstrumentedDeque<T> extends InstrumentedDequeForwarder<T> {
   }
 }
 ```
+
+NB: The delegate field is exposed as a protected final field with the lower-camel-case name of its
+type.
+
+## Features
+
++ More than one type can be forwarded.
++ The name of the generated forwarder class can be customised via `@Forward`'s `forwarderPattern`.
+
+## Known Limitations
+
++ Only interface types can be forwarded.
 
 ## Requirements
 
