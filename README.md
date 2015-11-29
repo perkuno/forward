@@ -80,3 +80,9 @@ Pull requests are welcome.
 
 We use [Travis CI](https://travis-ci.org) to verify the build
 [![Build Status](https://travis-ci.org/perkuno/forward.svg?branch=master)](https://travis-ci.org/perkuno/forward).
+
+## Acknowledgements
+
+Special thanks to the folks at [Square](https://squareup.com/) for
+[javapoet](https://github.com/square/javapoet) - a wonderful tool for writing code-generating
+annotation processors.
