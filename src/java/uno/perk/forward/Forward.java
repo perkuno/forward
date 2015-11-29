@@ -24,14 +24,9 @@ import java.lang.annotation.Target;
 public @interface Forward {
 
   /**
-   * @return The interface type to forward.
+   * @return The interface types to forward.
    */
-  Class<?> value();
-
-  /**
-   * @return The name of the delegate variable - "delegate" by default.
-   */
-  String delegateName() default "delegate";
+  Class<?>[] value();
 
   /**
    * By default, the generated forwarder to extend will be named

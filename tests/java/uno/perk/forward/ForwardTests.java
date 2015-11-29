@@ -2,6 +2,7 @@ package uno.perk.forward;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +23,7 @@ public class ForwardTests {
     }
 
     @Forward(StringableInt.class)
-    static class Simple extends StringableIntForwarder {
+    static class Simple extends SimpleForwarder {
       public Simple(StringableInt delegate) {
         super(delegate);
       }
@@ -46,7 +47,7 @@ public class ForwardTests {
 
     @Forward(ComplexParameterized.class)
     static class Parameterized<S, T extends RunnableFuture<S>, E extends Exception>
-        extends ComplexParameterizedForwarder<S, T, E> {
+        extends ParameterizedForwarder<S, T, E> {
 
       public Parameterized(ComplexParameterized<S, T, E> delegate) {
         super(delegate);
@@ -95,44 +96,15 @@ public class ForwardTests {
               return String.format("%s: %d", message, future.get());
             }
           };
-      Parameterized<Integer, IntFuture, IOException> parameterized =
-          new Parameterized<Integer, IntFuture, IOException>(delegate);
+      Parameterized<Integer, IntFuture, IOException> parameterized = new Parameterized<>(delegate);
 
       assertEquals("Jake: 42", parameterized.get("Jake", new IntFuture()));
     }
   }
 
-  public static class DelegateNameTest {
-    @Forward(value = Runnable.class, delegateName = "bob")
-    static class CustomDelegateName extends RunnableForwarder {
-      public CustomDelegateName(Runnable delegate) {
-        super(delegate);
-      }
-      public Runnable delegate() {
-        return bob;
-      }
-    }
-
-    @Test
-    public void testCustomDelegateName() throws Exception {
-      final AtomicBoolean ran = new AtomicBoolean(false);
-      Runnable delegate = new Runnable() {
-        @Override public void run() {
-          ran.set(true);
-        }
-      };
-      CustomDelegateName customDelegateName = new CustomDelegateName(delegate);
-
-      assertFalse(ran.get());
-      customDelegateName.run();
-      assertTrue(ran.get());
-      assertSame(delegate, customDelegateName.delegate());
-    }
-  }
-
   public static class ForwarderNameTest {
     @Forward(value=Closeable.class, forwarderPattern = "Forwarding$1")
-    static class CustomForwarderName extends ForwardingCloseable {
+    static class CustomForwarderName extends ForwardingCustomForwarderName {
       public CustomForwarderName(Closeable delegate) {
         super(delegate);
       }
@@ -151,6 +123,39 @@ public class ForwardTests {
       assertFalse(closed.get());
       customDelegateName.close();
       assertTrue(closed.get());
+    }
+  }
+
+  public static class MultipleForwardsTest {
+    @Forward({Closeable.class, Callable.class})
+    static class Multiple<T> extends MultipleForwarder<T> {
+      public Multiple(Closeable closeable, Callable<T> callable) {
+        super(closeable, callable);
+      }
+    }
+
+    @Test
+    public void testMultipleForwarders() throws Exception {
+      final AtomicBoolean closed = new AtomicBoolean(false);
+      Closeable closeable = new Closeable() {
+        @Override
+        public void close() {
+          closed.set(true);
+        }
+      };
+      Callable<String> callable = new Callable<String>() {
+        @Override
+        public String call() throws Exception {
+          return "Jake";
+        }
+      };
+      Multiple<String> multiple = new Multiple<>(closeable, callable);
+
+      assertFalse(closed.get());
+      multiple.close();
+      assertTrue(closed.get());
+
+      assertEquals("Jake", multiple.call());
     }
   }
 }

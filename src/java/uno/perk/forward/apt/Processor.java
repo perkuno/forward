@@ -1,9 +1,12 @@
 package uno.perk.forward.apt;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,14 +21,17 @@ import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
@@ -52,13 +58,11 @@ public class Processor extends AbstractProcessor {
   }
 
   private static class ForwardMirror {
-    final TypeElement forwardedType;
-    final String delegateName;
+    final Iterable<TypeElement> forwardedTypes;
     final String forwarderPattern;
 
-    ForwardMirror(TypeElement forwardedType, String delegateName, String forwarderPattern) {
-      this.forwardedType = forwardedType;
-      this.delegateName = delegateName;
+    ForwardMirror(Iterable<TypeElement> forwardedTypes, String forwarderPattern) {
+      this.forwardedTypes = forwardedTypes;
       this.forwarderPattern = forwarderPattern;
     }
   }
@@ -74,16 +78,11 @@ public class Processor extends AbstractProcessor {
       TypeElement typeElement = (TypeElement) element;
 
       ForwardMirror forwardMirror = getForwardMirror(typeElement);
-      Matcher classNameMatcher =
-          CLASSNAME_MATCHER.matcher(forwardMirror.forwardedType.getSimpleName());
+      Matcher classNameMatcher = CLASSNAME_MATCHER.matcher(typeElement.getSimpleName());
       String forwarderName = classNameMatcher.replaceFirst(forwardMirror.forwarderPattern);
 
       try {
-        generateForwarder(
-            typeElement,
-            forwardMirror.forwardedType,
-            forwardMirror.delegateName,
-            forwarderName);
+        generateForwarder(typeElement, forwardMirror.forwardedTypes, forwarderName);
       } catch (IOException e) {
         error(String.format("Failed to write forwarder: %s.", e), element);
       }
@@ -92,7 +91,7 @@ public class Processor extends AbstractProcessor {
   }
 
   private ForwardMirror getForwardMirror(TypeElement typeElement) {
-    TypeElement forwardedType = null;
+    List<TypeElement> forwardedTypes = new LinkedList<TypeElement>();
     String delegateName = null;
     String forwarderPattern = null;
 
@@ -103,18 +102,20 @@ public class Processor extends AbstractProcessor {
       String keyName = entry.getKey().getSimpleName().toString();
       Object value = entry.getValue().getValue();
       if (keyName.equals("value")) {
-        if (!(value instanceof DeclaredType)) {
+        if (!(value instanceof List)) {
           error("Unexpected value for 'value'.", typeElement);
         }
-        forwardedType = (TypeElement) ((DeclaredType) value).asElement();
-        if (!forwardedType.getKind().isInterface()) {
-          error("@Forward can only forward interface types.", typeElement);
+        @SuppressWarnings("unchecked") // AnnotationValue guarantees the List parameterization here.
+        List<? extends AnnotationValue> types = (List<? extends AnnotationValue>) value;
+        for (AnnotationValue type : types) {
+          note("AnnotationValue: " + type + " of type: " + type.getClass(), typeElement);
+          DeclaredType declaredType = (DeclaredType) type.getValue();
+          TypeElement forwardedType = (TypeElement) declaredType.asElement();
+          if (!forwardedType.getKind().isInterface()) {
+            error("@Forward can only forward interface types.", typeElement);
+          }
+          forwardedTypes.add(forwardedType);
         }
-      } else if (keyName.equals("delegateName")) {
-        if (!(value instanceof String)) {
-          error("Unexpected value for 'delegateName'.", typeElement);
-        }
-        delegateName = (String) value;
       } else if (keyName.equals("forwarderPattern")) {
         if (!(value instanceof String)) {
           error("Unexpected value for 'forwarderPattern'.", typeElement);
@@ -127,63 +128,94 @@ public class Processor extends AbstractProcessor {
       }
     }
 
-    if (forwardedType == null || delegateName == null || forwarderPattern == null) {
+    if (forwardedTypes.isEmpty() || forwarderPattern == null) {
       error("Failed to extract values from Forward annotation.", typeElement);
     }
 
-    return new ForwardMirror(forwardedType, delegateName, forwarderPattern);
+    return new ForwardMirror(forwardedTypes, forwarderPattern);
   }
 
   private static final EnumSet<Modifier> PUBLIC_ABSTRACT =
       EnumSet.of(Modifier.PUBLIC, Modifier.ABSTRACT);
 
+  private static class ForwardedTypeInfo {
+    final TypeElement forwardedType;
+    final TypeName typeName;
+    final String delegateName;
+
+    ForwardedTypeInfo(TypeElement forwardedType, TypeName typeName, String delegateName) {
+      this.delegateName = delegateName;
+      this.forwardedType = forwardedType;
+      this.typeName = typeName;
+    }
+  }
+
   private void generateForwarder(
       TypeElement typeElement,
-      TypeElement forwardedType,
-      String delegateName,
+      Iterable<TypeElement> forwardedTypes,
       String forwarderName) throws IOException {
 
-    TypeSpec.Builder forwarderBuilder = TypeSpec.classBuilder(forwarderName);
-    List<? extends TypeParameterElement> typeParameters = forwardedType.getTypeParameters();
-    for (TypeParameterElement typeParameter : typeParameters) {
-      TypeVariable typeVariable = (TypeVariable) typeParameter.asType();
-      forwarderBuilder.addTypeVariable(TypeVariableName.get(typeVariable));
+    List<ForwardedTypeInfo> forwardedTypeInfos = new LinkedList<>();
+    for (TypeElement forwardedType : forwardedTypes) {
+      TypeName forwardedTypeName = getTypeName(forwardedType);
+      Name simpleName = forwardedType.getSimpleName();
+      String delegateName =
+          String.format(
+              "%c%s",
+              Character.toLowerCase(simpleName.charAt(0)),
+              simpleName.subSequence(1, simpleName.length()));
+      forwardedTypeInfos.add(new ForwardedTypeInfo(forwardedType, forwardedTypeName, delegateName));
     }
 
-    TypeName forwardedTypeName = getTypeName(forwardedType);
-    forwarderBuilder
-        .addSuperinterface(forwardedTypeName)
-        .addField(forwardedTypeName, delegateName, Modifier.PROTECTED, Modifier.FINAL)
-        .addMethod(
-            MethodSpec.constructorBuilder()
-                .addParameter(forwardedTypeName, delegateName)
-                .addStatement("this.$L = $L", delegateName, delegateName)
-                .build());
+    TypeSpec.Builder forwarderBuilder = TypeSpec.classBuilder(forwarderName);
+    MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder();
+    for (ForwardedTypeInfo forwardedTypeInfo : forwardedTypeInfos) {
+      for (TypeParameterElement typeParam : forwardedTypeInfo.forwardedType.getTypeParameters()) {
+        TypeVariable typeVariable = (TypeVariable) typeParam.asType();
+        forwarderBuilder.addTypeVariable(TypeVariableName.get(typeVariable));
+      }
 
-    for (Element element : getElementUtils().getAllMembers(forwardedType)) {
-      if (element instanceof ExecutableElement) {
-        ExecutableElement executableElement = (ExecutableElement) element;
-        if (executableElement.getModifiers().containsAll(PUBLIC_ABSTRACT)) {
-          MethodSpec template = MethodSpec.overriding(executableElement).build();
-
-          StringBuilder statement = new StringBuilder();
-          if (!template.returnType.equals(TypeName.VOID)) {
-            statement.append("return ");
-          }
-
-          statement.append("this.$L.$N(");
-          for (Iterator<ParameterSpec> iter = template.parameters.iterator(); iter.hasNext(); ) {
-            statement.append(iter.next().name);
-            if (iter.hasNext()) {
-              statement.append(", ");
-            }
-          }
-          statement.append(")");
-
-          forwarderBuilder.addMethod(
-              template.toBuilder()
-                  .addStatement(statement.toString(), delegateName, template)
+      TypeName typeName = forwardedTypeInfo.typeName;
+      String delegateName = forwardedTypeInfo.delegateName;
+      forwarderBuilder
+          .addSuperinterface(typeName)
+          .addField(
+              FieldSpec.builder(typeName, delegateName)
+                  .addModifiers(Modifier.PROTECTED, Modifier.FINAL)
                   .build());
+
+      constructorBuilder
+          .addParameter(typeName, delegateName)
+          .addStatement("this.$L = $L", delegateName, delegateName);
+    }
+    forwarderBuilder.addMethod(constructorBuilder.build());
+
+    for (ForwardedTypeInfo forwardedTypeInfo : forwardedTypeInfos) {
+      for (Element element : getElementUtils().getAllMembers(forwardedTypeInfo.forwardedType)) {
+        if (element instanceof ExecutableElement) {
+          ExecutableElement executableElement = (ExecutableElement) element;
+          if (executableElement.getModifiers().containsAll(PUBLIC_ABSTRACT)) {
+            MethodSpec template = MethodSpec.overriding(executableElement).build();
+
+            StringBuilder statement = new StringBuilder();
+            if (!template.returnType.equals(TypeName.VOID)) {
+              statement.append("return ");
+            }
+
+            statement.append("this.$L.$N(");
+            for (Iterator<ParameterSpec> iter = template.parameters.iterator(); iter.hasNext(); ) {
+              statement.append(iter.next().name);
+              if (iter.hasNext()) {
+                statement.append(", ");
+              }
+            }
+            statement.append(")");
+
+            forwarderBuilder.addMethod(
+                template.toBuilder()
+                    .addStatement(statement.toString(), forwardedTypeInfo.delegateName, template)
+                    .build());
+          }
         }
       }
     }
@@ -195,10 +227,7 @@ public class Processor extends AbstractProcessor {
             .indent("  ")
             .build();
     forwarderFile.writeTo(processingEnv.getFiler());
-    note(
-        String.format("Wrote forwarder %s.%s for %s %s",
-            packageName, forwarderName, delegateName, forwardedTypeName),
-        typeElement);
+    note(String.format("Wrote forwarder %s.%s", packageName, forwarderName), typeElement);
   }
 
   private static TypeName getTypeName(TypeElement typeElement) {
