@@ -72,7 +72,7 @@ type.
 
 ## Requirements
 
-+ Java 7+
++ Java 8
 
 ## Development
 

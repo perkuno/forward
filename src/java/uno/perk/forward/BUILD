@@ -16,7 +16,7 @@ annotation_processor(
       push_db_basedir=os.path.join(get_buildroot(), 'build-support', 'publish', 'pushdb')
     ),
     publication_metadata=ossrh(
-      description='Forwarder code-generation for Java 1.6+.',
+      description='Forwarder code-generation for Java 1.8.',
       url='https://github.com/perkuno/forward',
       licenses=[
         license(
