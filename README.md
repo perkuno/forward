@@ -2,6 +2,9 @@
 
 An annotation processor for generating forwarders.
 
+Grab the latest release from [Maven Central](http://search.maven.org/)
+[![version](https://img.shields.io/maven-central/v/uno.perk/forward.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22uno.perk%22%20AND%20a%3A%22forward%22)
+
 ## Use
 
 To create the equivalent of Guava's 100+ line
