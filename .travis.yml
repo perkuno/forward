@@ -27,5 +27,9 @@ cache:
     - $HOME/.cache/pants
     - $HOME/.ivy2/pants
 
+env:
+  global:
+    - PANTS_CONFIG_OVERRIDE="['pants.travis-ci.ini']"
+
 script: |
   yes | ./pants test publish.jar --local=/tmp/m2 --no-dryrun ::
