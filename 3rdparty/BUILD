@@ -1,7 +1,7 @@
 jar_library(
   name='javapoet',
   jars=[
-    jar('com.squareup', 'javapoet', '1.4.0'),
+    jar('com.squareup', 'javapoet', '1.7.0'),
   ]
 )
 
