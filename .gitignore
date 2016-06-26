@@ -1,7 +1,12 @@
+/.cache/
 /.idea/
 /.pants.d/
 /.pids/
 /dist/
+
+/.pants.run
+/.pants.workdir.file_lock
+/.pants.workdir.file_lock.lock_message
 
 *.iml
 *.ipr
