@@ -1,0 +1,13 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/openjdk:8-jdk
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run: ./pants test publish.jar --no-prompt --local=/tmp/m2 --no-dryrun ::
+
+
+
+
